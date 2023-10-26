@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en" >
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Three.JS with NPM and Vite</title>
+  <style>
+    body{
+      padding: 0;
+      margin: 0;
+    }
+  </style>
+</head>
+<body>
+<script  type="module"> 
+  import * as THREE from "three"
+  import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js"
+  import { GUI } from "three/examples/jsm/libs/lil-gui.module.min.js"
+  import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+  import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+  import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
+
+  let scene, camera, renderer, loadingBar, controls, motorcycle, gui;
+
+  init();
+
+  function init(){
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color( 0xaaaaaa );
+    
+    camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 0.1, 100 );
+    camera.position.set(0, 0.05, 0.22);
+    
+    const ambient = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 0.5);
+    scene.add(ambient);
+    
+    const light = new THREE.DirectionalLight(0xFFFFFF, 3);
+    light.position.set( 0.2, 1, 1 );
+    scene.add(light);
+    
+    renderer = new THREE.WebGLRenderer({antialias: true});
+    renderer.setPixelRatio( Math.max(window.devicePixelRatio, 2) );
+    renderer.setSize( window.innerWidth, window.innerHeight );
+    document.body.appendChild( renderer.domElement );
+        
+    controls = new OrbitControls( camera, renderer.domElement );
+    controls.target.y = 0.04;
+    controls.update();
+      
+    window.addEventListener( 'resize', resize, false);
+
+    const options = {
+      outputColorSpace: 'Linear',
+      physicallyCorrectLights: false
+    }
+
+    gui = new GUI();
+    gui.add( options, 'outputColorSpace', [ 'Linear', 'SRGB' ]).onChange( value => {
+      switch(value){
+        case 'Linear':
+          renderer.outputColorSpace = THREE.linearColorSpace;
+          break;
+        case 'SRGB':
+          renderer.ColorSpace = THREE.SRGBColorSpace;
+          break
+      }
+    });
+    gui.add( options, 'physicallyCorrectLights').onChange( value => {
+      renderer.physicallyCorrectLights = value;
+    });
+
+    setEnvironment();
+        
+    loadGLTF();
+  }
+
+  function setEnvironment(){
+    const loader = new RGBELoader();
+    const pmremGenerator = new THREE.PMREMGenerator( renderer );
+    pmremGenerator.compileEquirectangularShader();
+    
+    loader.load( 'venice_sunset_1k.hdr', ( texture ) => {
+      const envMap = pmremGenerator.fromEquirectangular( texture ).texture;
+      pmremGenerator.dispose();
+
+      scene.environment = envMap;
+
+    }, undefined, (err)=>{
+        console.error( 'An error occurred setting the environment.' + err.message );
+    } );
+  }
+    
+  function loadGLTF(){
+    const loader = new GLTFLoader( );
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath( 'draco-gltf/' );
+    loader.setDRACOLoader( dracoLoader );
+
+    // Load a glTF resource
+    loader.load(
+      // resource URL
+      'motorcycle.glb',
+      // called when the resource is loaded
+      gltf => {
+        const bbox = new THREE.Box3().setFromObject( gltf.scene );
+                
+        motorcycle = gltf.scene;
+                
+        scene.add( gltf.scene );
+        
+        update();
+      },
+      // called while loading is progressing
+      null,
+      // called when loading has errors
+      err => {
+
+        console.error( err.message );
+
+      }  
+    );
+  }
+
+  function update(){
+    requestAnimationFrame( update );
+    renderer.render( scene, camera );  
+  }
+
+  function resize(){
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize( window.innerWidth, window.innerHeight );
+  }
+</script>
+</body>
+</html>
